@@ -54,6 +54,10 @@ cd CinnamonCore && swift test
 
 CI (`.github/workflows/ci.yml`) runs the core tests and builds the app for the iOS Simulator on every push.
 
+### Installing on an iPhone without a Mac (TestFlight)
+
+`.github/workflows/testflight.yml` builds, signs and uploads the app to TestFlight on GitHub's Mac servers. It runs on every push to `main`, or by hand from the Actions tab. It needs a paid Apple Developer Program membership and four repository secrets: `APPLE_TEAM_ID`, `ASC_KEY_ID`, `ASC_ISSUER_ID` and `ASC_KEY_P8`. See the comments at the top of the workflow file. Until the secrets are set, the workflow skips the upload with a warning.
+
 ### Optional setup
 
 - **Fonts:** the design uses Bricolage Grotesque (headings) and Be Vietnam Pro (text), both under the SIL Open Font License from Google Fonts. Add `BricolageGrotesque-Bold.ttf` and `BeVietnamPro-Regular.ttf` (plus other weights) to `App/Fonts/`, and list them under `UIAppFonts` in `project.yml`. Until you do, the app uses the system font.
