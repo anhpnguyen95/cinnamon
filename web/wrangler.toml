@@ -15,3 +15,9 @@ database_id = "00000000-0000-0000-0000-000000000000"
 # Check for due reminders every minute.
 [triggers]
 crons = ["* * * * *"]
+
+# Chat ("Hỏi Cinnamon"). The Claude API key is a secret set by the deploy workflow.
+[vars]
+CHAT_MODEL = "claude-haiku-4-5"
+CHAT_LIMIT_DEVICE = "150"
+CHAT_LIMIT_TOTAL = "1000"

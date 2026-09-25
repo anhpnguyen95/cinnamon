@@ -1,8 +1,10 @@
 // Cinnamon reminder server (Cloudflare Worker + D1).
 // Stores, per phone, a push subscription and a list of upcoming reminder times with generic
-// text (never medicine names), and sends each one when it is due. Static files come from ./public.
+// text (never medicine names), and sends each one when it is due. It also relays chat
+// questions to Claude (worker/chat.js) without storing them. Static files come from ./public.
 
 import { generateVapidKeys, sendPush } from './webpush.js';
+import { handleChat } from './chat.js';
 
 const SUBJECT = 'mailto:cinnamon@example.com';
 const DEVICE = /^[0-9a-f-]{36}$/;
@@ -30,7 +32,7 @@ async function handleApi(request, env, url) {
     return json({ vapidPublicKey: (await vapidKeys(env)).publicKey });
   }
 
-  const match = url.pathname.match(/^\/api\/devices\/([^/]+)(?:\/(subscription|reminders|test))?$/);
+  const match = url.pathname.match(/^\/api\/devices\/([^/]+)(?:\/(subscription|reminders|test|chat))?$/);
   if (!match || !DEVICE.test(match[1])) return json({ error: 'not found' }, 404);
   const [, device, action] = match;
   const now = Date.now();
@@ -60,6 +62,10 @@ async function handleApi(request, env, url) {
     }
     await env.DB.batch(statements);
     return json({ ok: true, count: clean.length });
+  }
+
+  if (action === 'chat' && request.method === 'POST') {
+    return handleChat(request, env, device, { now });
   }
 
   if (action === 'test' && request.method === 'POST') {

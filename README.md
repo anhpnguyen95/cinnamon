@@ -13,7 +13,9 @@ A calm companion app for older adults living alone. It gives medication reminder
 | Morning sleep and energy check-in that adjusts the day; doctor suggestion after 5 hard days in 7 | Built |
 | Refill reminder when about 5 days of pills remain | Built |
 | Backup contact alerts and backup contact app | Not yet (needs a small server; rules are in `BackupAlertPolicy`) |
-| On-device chat, cooking mode, message drafting | Not yet |
+| Chat ("Hỏi Cinnamon") for cooking, quick stretches and light exercise | Built in the web trial (Claude Haiku 4.5 via the Worker) |
+| Guided 4–8 minute routines (stretch, breathing, indoor movement) that open with why they help | Built in the web trial |
+| Message drafting | Not yet |
 | Earlier-meals/bedtime nudges | Logic only (`RoutineCoach`); UI not yet |
 | Nearby places, bus and Grab comparison | Not yet |
 
@@ -27,11 +29,15 @@ What the trial can't do compared with the iOS app:
 - Notifications have no "Đã uống" button; she taps the notification to open the app.
 - Notifications don't break through Focus mode.
 - Reminders need the internet and the server.
-- Medicine names aren't read from the photo.
+
+Medicine photos are read on the phone (Tesseract.js, Vietnamese model). The photo never leaves the phone. The first time, about 5 MB of reader files download from jsDelivr, and the browser keeps them after that. If nothing readable is found, she types the name.
+
+The chat sends her question, the recent conversation, and a short note about today (her diet limits and conditions from Settings, the morning check-in, and air/heat) to Claude through the Worker. It never sends medicine names or her address. The conversation is stored only on her phone. The Worker keeps only a per-day count of questions: 150 per phone and 1,000 in total by default (`CHAT_LIMIT_DEVICE` and `CHAT_LIMIT_TOTAL` in `wrangler.toml`). At 100 questions a day on Haiku 4.5, expect roughly $15 a month. Set a monthly spend limit in the Anthropic Console as well.
 
 Deploying:
 - `.github/workflows/deploy-web.yml` deploys on every push to `main` that touches `web/`.
 - It needs `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` as repository secrets; see the comments in the workflow.
+- For the chat, add `ANTHROPIC_API_KEY` too (from console.anthropic.com). Without it, the chat says it isn't set up yet and everything else still works.
 
 Local development:
 

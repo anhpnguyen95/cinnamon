@@ -1,6 +1,7 @@
 // Cinnamon web trial: the same flows as the iOS app, in the browser.
 // Data lives in this phone's browser storage; only reminder times go to the reminder server.
 import * as core from './core.js';
+import * as companion from './companion.js';
 
 const KEY = 'cinnamon';
 const MIN = 60_000;
@@ -25,6 +26,9 @@ function freshState() {
     deviceId: crypto.randomUUID(),
     push: { enabled: false, lastSync: null },
     forecast: null,
+    profile: { conditions: [], saltG: null, proteinG: null },
+    chat: [],
+    activities: [],
   };
 }
 
@@ -149,6 +153,8 @@ const ICONS = {
   speaker: '<path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/>',
   pill: '<path d="M10.5 20.5a4.95 4.95 0 0 1-7-7l7-7a4.95 4.95 0 0 1 7 7z"/><path d="m8.5 8.5 7 7"/>',
   gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
+  send: '<path d="M5 12h14M13 6l6 6-6 6"/>',
+  play: '<path d="M8 5v14l11-7z"/>',
   pin: '<path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>',
 };
 const svg = (name, size, width) => icon.path(ICONS[name], size, width);
@@ -204,8 +210,7 @@ function viewWelcome() {
     </div>
     <div class="stack">
       <div class="eyebrow">Khu vực nhà bạn</div>
-      <button class="btn-soft" data-act="locate" data-target="welcome">${svg('pin')} ${welcomeDraft.home && !welcomeDraft.home.approx ? 'Đã lấy vị trí ✓' : 'Dùng vị trí hiện tại'}</button>
-      <p class="small muted">Chỉ để xem không khí và thời tiết. Vị trí được làm tròn khoảng 5 km trước khi gửi đi. Nếu bỏ qua, Cinnamon dùng trung tâm Hà Nội.</p>
+      ${locationControls('welcome', welcomeDraft.home)}
     </div>
     <button class="btn-block" data-act="finishWelcome">Bắt đầu</button>`;
 }
@@ -228,14 +233,40 @@ function viewHome() {
     ${needsPush ? `<a class="card honey notice" href="#/settings" style="text-decoration:none"><strong>Bật nhắc thuốc</strong><span>Để Cinnamon gửi thông báo cả khi đang đóng ứng dụng. Bấm vào đây.</span></a>` : ''}
     ${core.shouldSuggestDoctor(state.checkIns, now()) ? `<div class="card honey notice">Tuần này bạn hay mệt hoặc ngủ không ngon. Nên kể với bác sĩ trong lần khám tới nhé.</div>` : ''}
     ${doseCard(dose)}
+    ${demoBanner()}
     ${outdoorCard()}
     ${refill.map((m) => `<div class="card chai notice">${esc(medName(m))} còn khoảng ${core.daysOfSupplyLeft(m)} ngày. Nhớ mua thêm nhé.</div>`).join('')}
+    ${activityCard()}
     <div class="spacer"></div>
-    <div class="btn btn-ink btn-block" role="note" style="min-height:72px;justify-content:flex-start;padding:0 10px 0 22px;cursor:default">
+    <a class="btn btn-ink btn-block" href="#/chat" style="min-height:76px;justify-content:flex-start;padding:0 20px 0 22px">
       <span style="width:28px;height:28px;display:inline-block">${icon.spiral('#E8A15C', 2.2)}</span>
-      <span class="grow" style="text-align:left">Hỏi Cinnamon</span>
-      <span class="btn-chip" style="background:var(--caramel);color:var(--ink);border-radius:999px;display:inline-flex;align-items:center;min-height:44px;padding:0 12px;font-size:15px">Sắp có</span>
-    </div>`;
+      <span class="grow" style="text-align:left;display:flex;flex-direction:column;line-height:1.25">Hỏi Cinnamon<span style="font-weight:500;font-size:15px;color:var(--chai)">Nấu ăn · Giãn cơ · Tập nhẹ</span></span>
+      ${svg('chevron', 22)}
+    </a>`;
+}
+
+const doneToday = () => state.activities.filter((a) => a.dayKey === todayKey());
+
+/** One short routine to try today, with why it helps; or a well-done note once she has moved. */
+function activityCard() {
+  const done = doneToday();
+  if (done.length) {
+    const minutes = done.reduce((n, a) => n + a.minutes, 0);
+    return `<div class="card jade notice row">${icon.star('#2F6B5A', 26)}<span class="grow">Hôm nay bạn đã vận động ${minutes} phút. Giỏi lắm!</span></div>`;
+  }
+  const r = companion.routinesFor(dayAdjust().energy)[0];
+  return routineCard(r, 'Vận động hôm nay');
+}
+
+function routineCard(r, eyebrow = '') {
+  return `<a class="card routine-card" href="#/routine/${r.id}">
+      ${eyebrow ? `<div class="eyebrow">${eyebrow}</div>` : ''}
+      <div class="row" style="align-items:flex-start">
+        <span class="minutes"><b>${r.minutes}</b>phút</span>
+        <span class="grow stack" style="gap:2px"><strong style="font-size:20px">${esc(r.title)}</strong><span class="small" style="color:var(--body)">${esc(r.why.split('. ')[0])}.</span></span>
+        <span style="color:var(--cinnamon);align-self:center">${svg('chevron', 22)}</span>
+      </div>
+    </a>`;
 }
 
 function doseCard(dose) {
@@ -308,8 +339,27 @@ async function refreshForecast(force = false) {
   if (r === 'home' || r === 'outdoor') render();
 }
 
+/** Sample forecasts for trying the bad-day screens from anywhere. */
+function demoHours(kind) {
+  const start = Math.floor(now() / 3600e3) * 3600e3 - 3 * 3600e3;
+  const hours = [];
+  for (let i = 0; i < 51; i++) {
+    const time = start + i * 3600e3;
+    const h = new Date(time).getHours();
+    const daytime = h >= 7 && h <= 17;
+    if (kind === 'smog') hours.push({ time, aqi: 165, uv: daytime ? 4 : 0, tempC: 27, rh: 60 });
+    else hours.push({ time, aqi: h >= 19 ? 70 : 42, uv: daytime ? (h >= 10 && h <= 15 ? 8 : 3) : 0, tempC: h >= 11 && h <= 16 ? 36 : 28, rh: 65 });
+  }
+  return hours;
+}
+
+const forecastHours = () => (state.demo ? demoHours(state.demo) : state.forecast?.hours || []);
+
+const demoBanner = () =>
+  state.demo ? `<a class="card honey notice" href="#/settings" style="text-decoration:none">Đang xem dữ liệu mẫu (${state.demo === 'smog' ? 'không khí xấu' : 'nắng nóng'}). Tắt trong Cài đặt.</a>` : '';
+
 function currentOutlook() {
-  const hours = state.forecast?.hours || [];
+  const hours = forecastHours();
   if (!hours.length) return null;
   // After this evening's waking hours, look at tomorrow's instead.
   for (const day of [today(), core.addDays(today(), 1)]) {
@@ -321,7 +371,7 @@ function currentOutlook() {
 }
 
 function currentHour() {
-  const hours = state.forecast?.hours || [];
+  const hours = forecastHours();
   const h = [...hours].reverse().find((x) => x.time <= now());
   return h ? core.assessHour(h, state.thresholds) : null;
 }
@@ -368,7 +418,7 @@ function viewOutdoor() {
   const o = currentOutlook();
   const adj = dayAdjust();
   if (!o) {
-    return `${header('Bên ngoài hôm nay')}<p>${state.forecast?.error ? esc(state.forecast.error) : 'Đang tải thời tiết…'}</p>`;
+    return `${header('Bên ngoài hôm nay')}${demoBanner()}<p>${state.forecast?.error ? esc(state.forecast.error) : 'Đang tải thời tiết…'}</p>`;
   }
   const walking = core.walkingLimit(adj.indoorOnly ? core.RISK.danger : o.bestRisk ?? core.RISK.danger, adj.energy);
   const air = o.worstFactors.has('air');
@@ -403,6 +453,7 @@ function viewOutdoor() {
   const last = o.hours[o.hours.length - 1];
   return `
     ${header('Bên ngoài hôm nay')}
+    ${demoBanner()}
     ${top}
     <section class="card">
       <div class="eyebrow">Hôm nay</div>
@@ -414,13 +465,18 @@ function viewOutdoor() {
     ${o.stayIn ? '' : `<section class="card chai"><div class="eyebrow" style="color:var(--bark)">Khi ra ngoài</div><p>${advice}</p></section>`}
     ${o.heatDanger ? `<section class="card chili"><strong style="color:var(--chili-deep)">Nóng nguy hiểm ${core.timeText(o.heatDanger.start)} – ${core.timeText(o.heatDanger.end)}</strong><p>Lúc này nên bật điều hoà. Để 27–28°C và bật thêm quạt cho đỡ tốn điện. Ở phòng mát nhất, lau người bằng khăn mát.</p><p class="muted">${fluids}</p></section>` : ''}
     ${o.stayIn || adj.indoorOnly ? indoorIdeas() : ''}
-    <p class="small muted">Nguồn: Open-Meteo · cập nhật ${core.timeText(state.forecast.fetchedAt)}</p>`;
+    <p class="small muted">${state.demo ? 'Dữ liệu mẫu, không phải thời tiết thật.' : `Nguồn: Open-Meteo${state.home?.label ? ` · ${esc(state.home.label)}` : ''} · cập nhật ${state.forecast?.fetchedAt ? core.timeText(state.forecast.fetchedAt) : '—'}`}</p>`;
 }
 
 function indoorIdeas() {
-  const ideas = [['Giãn cơ nhẹ', '10 phút'], ['Nấu một món ít muối', '20 phút'], ['Tập thở chậm', '5 phút']];
+  const cook = 'Hôm nay tôi ở nhà. Gợi ý một món ăn ít muối, nấu nhanh, không phải đứng bếp lâu.';
+  const ideas = [
+    ['Giãn cơ nhẹ', '5 phút', 'href="#/routine/stretch"'],
+    ['Nấu một món ít muối', 'Hỏi Cinnamon', `href="#/chat" data-act="ask" data-text="${esc(cook)}"`],
+    ['Tập thở chậm', '4 phút', 'href="#/routine/breathe"'],
+  ];
   return `<div class="eyebrow">Ở nhà hôm nay</div>${ideas
-    .map(([t, m]) => `<div class="card row" style="padding:14px 18px"><strong class="grow">${t}</strong><span class="muted">${m}</span></div>`)
+    .map(([t, m, attrs]) => `<a class="card row" ${attrs} style="padding:14px 18px;text-decoration:none;color:inherit"><strong class="grow">${t}</strong><span class="muted">${m}</span>${svg('chevron', 20)}</a>`)
     .join('')}`;
 }
 
@@ -554,12 +610,13 @@ function viewAdd() {
   if (step === 0) {
     body = `
       <h1>Chụp hộp thuốc hoặc vỉ thuốc</h1>
-      <p style="color:var(--body)">Ảnh giúp bạn nhận ra thuốc khi được nhắc.</p>
+      <p style="color:var(--body)">Chụp rõ mặt có tên thuốc. Cinnamon sẽ thử đọc tên, và ảnh giúp bạn nhận ra thuốc khi được nhắc.</p>
       <label class="camera" aria-label="Chụp ảnh thuốc">
         ${draft.photo ? `<img src="${esc(draft.photo)}" alt="Ảnh thuốc">` : `<div class="stack" style="align-items:center">${svg('camera', 40, 2)}<strong>Chụp ảnh</strong></div>`}
         <input type="file" accept="image/*" capture="environment" data-bind="photo">
       </label>
-      <label class="field"><span class="eyebrow">Tên thuốc</span><input data-bind="draft.name" value="${esc(draft.name)}" placeholder="Ví dụ: Prednisolon" autocomplete="off"></label>
+      ${ocrStatus()}
+      <label class="field"><span class="eyebrow">Tên thuốc</span><input data-bind="draft.name" class="${draft.ocr?.state === 'failed' && !draft.name ? 'attention' : ''}" value="${esc(draft.name)}" placeholder="Ví dụ: Prednisolon" autocomplete="off" autocapitalize="words"></label>
       <input data-bind="draft.strength" value="${esc(draft.strength || '')}" placeholder="Hàm lượng, ví dụ 5 mg (không bắt buộc)" autocomplete="off">`;
     footer = `<button class="btn-block" data-act="draftNext" data-need="name">Tiếp</button>`;
   } else if (step === 1) {
@@ -612,6 +669,101 @@ function viewAdd() {
   return `${top}${body}<div class="spacer"></div>${footer}`;
 }
 
+function ocrStatus() {
+  const o = draft.ocr;
+  if (!o) return '';
+  if (o.state === 'reading') {
+    return `<div class="card chai row notice" role="status"><span class="spin" style="width:28px;height:28px;flex-shrink:0">${icon.spiral('#A2532A', 2.4)}</span>
+      <span class="grow">Đang đọc tên thuốc trên ảnh…${o.firstTime ? '<br><span class="small muted">Lần đầu cần tải bộ đọc chữ, mất khoảng một phút.</span>' : ''}</span></div>`;
+  }
+  if (o.state === 'found') {
+    const others = (o.candidates || []).filter((c) => c !== draft.name);
+    return `<div class="card jade notice stack" role="status" style="gap:8px"><span>Cinnamon đọc được tên thuốc. <strong>Xem lại</strong> và sửa nếu chưa đúng.</span>
+      ${others.length ? `<span class="small">Hay là:</span><div class="row" style="flex-wrap:wrap;gap:8px">${others.map((c) => `<button class="btn-chip" data-act="pickName" data-name="${esc(c)}">${esc(c)}</button>`).join('')}</div>` : ''}</div>`;
+  }
+  return `<div class="card honey notice" role="status">${
+    o.offline ? 'Cần có mạng trong lần đầu đọc ảnh. ' : 'Cinnamon chưa đọc được tên trên ảnh. '
+  }Bạn gõ tên thuốc vào ô bên dưới nhé, hoặc chụp lại gần hơn, đủ sáng.</div>`;
+}
+
+// ---------- Reading the label (on this phone) ----------
+
+// Text recognition runs in the browser; the photo never leaves the phone. The first time,
+// the reader (about 5 MB) is downloaded from the jsDelivr CDN and then kept by the browser.
+const TESSERACT = 'https://cdn.jsdelivr.net/npm/tesseract.js@7.0.0/dist/tesseract.min.js';
+let ocrWorker = null;
+
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    const el = document.createElement('script');
+    el.src = src;
+    el.onload = resolve;
+    el.onerror = () => reject(new Error('script'));
+    document.head.append(el);
+  });
+}
+
+function labelReader() {
+  if (!ocrWorker) {
+    ocrWorker = (async () => {
+      if (!window.Tesseract) await loadScript(TESSERACT);
+      const worker = await window.Tesseract.createWorker('vie');
+      localStorage.setItem('cinnamon.ocrReady', '1');
+      return worker;
+    })();
+    ocrWorker.catch(() => (ocrWorker = null));
+  }
+  return ocrWorker;
+}
+
+const withTimeout = (promise, ms) => Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))]);
+
+async function imageCanvas(file, maxSide) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = new Image();
+    img.src = url;
+    await img.decode();
+    const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(img.naturalWidth * scale);
+    canvas.height = Math.round(img.naturalHeight * scale);
+    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+    return canvas;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+async function readLabel(file) {
+  const canvas = await imageCanvas(file, 1600);
+  const worker = await labelReader();
+  const { data } = await worker.recognize(canvas, {}, { blocks: true });
+  const lines = (data.blocks || []).flatMap((b) => (b.paragraphs || []).flatMap((p) => p.lines || []));
+  return companion.guessLabel(lines.map((l) => ({ text: l.text.trim(), height: l.bbox.y1 - l.bbox.y0, confidence: l.confidence })));
+}
+
+async function recognizeInto(target, file) {
+  target.ocr = { state: 'reading', firstTime: !localStorage.getItem('cinnamon.ocrReady') };
+  render();
+  try {
+    const guess = await withTimeout(readLabel(file), 120_000);
+    if (guess.name) {
+      if (!target.name.trim() || target.nameFromPhoto) {
+        target.name = guess.name;
+        target.strength = guess.strength || '';
+        target.nameFromPhoto = true;
+      }
+      target.ocr = { state: 'found', candidates: guess.candidates };
+    } else {
+      target.ocr = { state: 'failed' };
+    }
+  } catch {
+    target.ocr = { state: 'failed', offline: navigator.onLine === false };
+  }
+  if (draft === target && ['add', 'edit'].includes(route().name)) render();
+}
+
 async function readPhoto(file) {
   const url = URL.createObjectURL(file);
   try {
@@ -639,6 +791,216 @@ function speak(text) {
   speechSynthesis.cancel();
   speechSynthesis.speak(u);
 }
+
+// ---------- Hỏi Cinnamon (chat) ----------
+
+let chatDraft = '';
+let chatBusy = false;
+let chatError = null;
+let chatIdeas = false;
+
+const CHAT_ERRORS = {
+  offline: 'Cần có mạng để hỏi Cinnamon. Bạn kiểm tra wifi hoặc 4G rồi thử lại nhé.',
+  limit: 'Hôm nay bạn đã hỏi nhiều rồi. Ngày mai hỏi tiếp nhé.',
+  setup: 'Phần trò chuyện chưa được bật. Người cài đặt cần thêm khoá Claude (xem hướng dẫn).',
+  busy: 'Cinnamon đang bận một chút. Bạn thử lại sau ít phút nhé.',
+  failed: 'Chưa gửi được câu hỏi. Bạn thử lại nhé.',
+};
+
+const stripMarks = (text) => text.replace(/\*\*/g, '');
+const formatReply = (text) => esc(text).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+
+function chatContextText() {
+  return companion.chatContext({
+    now: now(),
+    profile: state.profile,
+    checkIn: todaysCheckIn(),
+    outdoor: companion.outdoorSummary(currentOutlook(), currentHour()),
+    fluidLimitMl: state.fluidLimitMl,
+  });
+}
+
+async function sendChat(text) {
+  text = String(text || '').trim().slice(0, companion.CHAT_MAX_CHARS);
+  if (!text || chatBusy) return;
+  state.chat = [...state.chat, { role: 'user', text, at: now() }].slice(-companion.CHAT_HISTORY_KEPT);
+  chatDraft = '';
+  save();
+  await askCinnamon();
+}
+
+async function askCinnamon() {
+  if (chatBusy) return;
+  chatBusy = true;
+  chatError = null;
+  render();
+  try {
+    const res = await fetch(`/api/devices/${state.deviceId}/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: companion.historyToSend(state.chat), context: chatContextText() }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.text) {
+      state.chat = [...state.chat, { role: 'assistant', text: data.text, at: now() }].slice(-companion.CHAT_HISTORY_KEPT);
+      save();
+    } else {
+      chatError = { limit: 'limit', 'not configured': 'setup', busy: 'busy' }[data.error] || 'failed';
+    }
+  } catch {
+    chatError = navigator.onLine === false ? 'offline' : 'failed';
+  }
+  chatBusy = false;
+  if (route().name === 'chat') render();
+}
+
+function chatBubble(m, i) {
+  if (m.role === 'user') return `<div class="bubble mine">${esc(m.text)}</div>`;
+  const steps = companion.parseSteps(m.text);
+  return `<div class="bubble">
+      <div class="reply">${formatReply(m.text)}</div>
+      <div class="row" style="flex-wrap:wrap;gap:8px">
+        <button class="btn-chip" data-act="speakMsg" data-i="${i}">${svg('speaker', 18)} Đọc to</button>
+        ${steps.length ? `<button class="btn-chip" data-act="stepsFromMsg" data-i="${i}">${svg('play', 18)} Làm từng bước</button>` : ''}
+      </div>
+    </div>`;
+}
+
+function viewChat() {
+  const empty = !state.chat.length;
+  const routines = companion.routinesFor(dayAdjust().energy);
+  const intro = `
+    <section class="card chai stack">
+      <strong style="font-size:20px">Cinnamon giúp bạn nấu ăn, giãn cơ và tập nhẹ.</strong>
+      <span style="color:var(--body)">Bấm một gợi ý, hoặc gõ câu hỏi. Có thể bấm micro trên bàn phím để nói.</span>
+      <div class="starters">${companion.CHAT_STARTERS.map((c) => `<button class="btn-chip" data-act="ask" data-text="${esc(c.text)}">${esc(c.label)}</button>`).join('')}</div>
+    </section>
+    ${!state.profile.conditions.length && !state.profile.saltG ? `<a class="small" href="#/settings">Cho Cinnamon biết về sức khoẻ của bạn trong Cài đặt để gợi ý đúng hơn.</a>` : ''}
+    <div class="eyebrow">Tập ngay, theo từng bước</div>
+    ${routines.map((r) => routineCard(r)).join('')}`;
+  const thread = state.chat.map(chatBubble).join('');
+  const status = chatBusy
+    ? `<div class="bubble row" role="status"><span class="spin" style="width:24px;height:24px">${icon.spiral('#A2532A', 2.4)}</span> Cinnamon đang nghĩ…</div>`
+    : chatError
+      ? `<div class="card honey notice stack" role="alert">${CHAT_ERRORS[chatError]}${chatError !== 'limit' && chatError !== 'setup' ? '<button class="btn-soft" data-act="retryChat">Thử lại</button>' : ''}</div>`
+      : '';
+  return `
+    ${header('Hỏi Cinnamon')}
+    ${empty ? intro : thread}
+    ${!empty && chatIdeas ? intro : ''}
+    ${status}
+    <div id="chat-end"></div>
+    <div class="spacer"></div>
+    <div class="composer">
+      <textarea data-bind="chat.text" rows="2" maxlength="${companion.CHAT_MAX_CHARS}" placeholder="Hỏi Cinnamon…" aria-label="Câu hỏi">${esc(chatDraft)}</textarea>
+      <button class="btn-icon send" data-act="sendChat" aria-label="Gửi" ${chatBusy ? 'disabled' : ''}>${svg('send', 24, 2.6)}</button>
+    </div>
+    ${empty ? '' : `<div class="row between"><a class="small" href="#/chat" data-act="showIdeas">${chatIdeas ? 'Ẩn gợi ý' : 'Gợi ý khác'}</a><button class="btn-link" style="min-height:40px;font-size:15px" data-act="clearChat">Xoá cuộc trò chuyện</button></div>`}
+    <p class="small muted" style="margin-top:-8px">Cinnamon dùng Claude để trả lời. Cuộc trò chuyện chỉ lưu trên máy này. Cinnamon không thay bác sĩ; khi cấp cứu, gọi 115.</p>`;
+}
+
+// ---------- Step-by-step player (routines and cooking steps) ----------
+
+let player = null;
+let playerTimer = null;
+
+function speakStep() {
+  if (!player) return;
+  const step = player.steps[player.index];
+  if (step) speak(`${step.title}. ${step.how}`);
+  else if (player.index < 0) speak(`${player.title}. Chỉ ${player.minutes} phút. ${player.why}`);
+}
+
+function showStep(index) {
+  if (!player) return;
+  player.index = index;
+  const step = player.steps[index];
+  player.pausedLeft = null;
+  player.endsAt = step?.seconds ? now() + step.seconds * 1000 : null;
+  if (index >= player.steps.length && !player.fromChat && !player.recorded) {
+    player.recorded = true;
+    state.activities = [...state.activities, { id: player.id, dayKey: todayKey(), at: now(), minutes: player.minutes }].slice(-90);
+    save();
+  }
+  if (player.voice && step) speakStep();
+  render();
+}
+
+function tickPlayer() {
+  const el = document.getElementById('timer');
+  if (!player || !player.endsAt) return;
+  const left = Math.max(0, Math.ceil((player.endsAt - now()) / 1000));
+  if (el) el.textContent = clock(left);
+  if (left === 0) {
+    player.endsAt = null;
+    player.timerDone = player.index;
+    if (player.voice) speak('Xong. Bấm Tiếp để sang bước sau.');
+    render();
+  }
+}
+
+const clock = (sec) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+
+function viewPlayer() {
+  const p = player;
+  const total = p.steps.length;
+  const voice = `<button class="btn-chip" data-act="playerVoice" aria-pressed="${Boolean(p.voice)}">${svg('speaker', 18)} ${p.voice ? 'Đang đọc từng bước' : 'Đọc to từng bước'}</button>`;
+  if (p.index < 0) {
+    return `
+      ${header(p.kind || 'Vận động', 'home')}
+      <section class="hero stack" style="gap:12px">
+        <div class="eyebrow">Chỉ ${p.minutes} phút · ${total} động tác</div>
+        <h1 style="color:var(--cream)">${esc(p.title)}</h1>
+        <p style="font-size:20px;color:var(--chai)"><strong style="color:var(--caramel)">Vì sao nên tập:</strong> ${esc(p.why)}</p>
+      </section>
+      <div class="row" style="flex-wrap:wrap;gap:8px">${voice}<button class="btn-chip" data-act="playerSpeak">${svg('speaker', 18)} Nghe giới thiệu</button></div>
+      <div class="card chai small">Cần một chiếc ghế chắc chắn. ${esc(companion.STOP_NOTE)}</div>
+      <div class="spacer"></div>
+      <button class="btn-jade btn-block" data-act="playerStart">${svg('play', 24)} Bắt đầu</button>`;
+  }
+  if (p.index >= total) {
+    return `
+      <div class="spacer"></div>
+      <section class="card" style="align-items:center;text-align:center;padding:28px 20px">
+        ${icon.star('#2F6B5A', 56)}
+        <h2>Xong rồi!</h2>
+        <p style="font-size:20px">${p.fromChat ? 'Bạn đã làm xong tất cả các bước.' : `Bạn vừa dành ${p.minutes} phút cho cơ thể. Cơ thể sẽ cảm ơn bạn.`}</p>
+      </section>
+      <div class="spacer"></div>
+      <button class="btn-block" data-act="playerDone">${p.fromChat ? 'Quay lại trò chuyện' : 'Về trang chính'}</button>`;
+  }
+  const step = p.steps[p.index];
+  const progress = p.steps.map((_, i) => `<span class="${i <= p.index ? 'on' : ''}"></span>`).join('');
+  let timer = '';
+  if (step.seconds) {
+    const running = p.endsAt != null;
+    const paused = p.pausedLeft != null;
+    const left = running ? Math.max(0, Math.ceil((p.endsAt - now()) / 1000)) : paused ? Math.ceil(p.pausedLeft / 1000) : 0;
+    timer = p.timerDone === p.index && !running && !paused
+      ? `<div class="timer done">${svg('check', 44, 3)}</div>`
+      : `<button class="timer" data-act="playerPause" aria-label="${paused ? 'Chạy tiếp' : 'Tạm dừng'}"><span id="timer">${clock(left)}</span><small>${paused ? 'Bấm để chạy tiếp' : 'Bấm để tạm dừng'}</small></button>`;
+  }
+  return `
+    <div class="row">
+      <a class="btn btn-icon" href="#/${p.fromChat ? 'chat' : 'home'}" aria-label="Dừng">${svg('close')}</a>
+      <div class="progress">${progress}</div>
+      <span class="muted" style="font-weight:600">${p.index + 1}/${total}</span>
+    </div>
+    <section class="card stack" style="gap:14px;padding:24px 20px">
+      <div class="eyebrow">${esc(p.title)}</div>
+      <h1 style="font-size:32px">${esc(step.title)}</h1>
+      <p style="font-size:22px;line-height:1.5">${formatReply(step.how)}</p>
+    </section>
+    ${timer}
+    <div class="row" style="flex-wrap:wrap;gap:8px">${voice}<button class="btn-chip" data-act="playerSpeak">${svg('speaker', 18)} Đọc bước này</button></div>
+    <div class="spacer"></div>
+    <div class="grid2">
+      ${p.index > 0 ? '<button class="btn-soft" data-act="playerPrev">Quay lại</button>' : ''}
+      <button data-act="playerNext">${p.index + 1 === total ? 'Xong' : 'Tiếp'}</button>
+    </div>`;
+}
+
+setInterval(tickPlayer, 500);
 
 // ---------- Settings ----------
 
@@ -674,35 +1036,89 @@ function viewSettings() {
     </section>
     <section class="card">
       <div class="eyebrow">Khu vực nhà</div>
-      <p>${state.home && !state.home.approx ? 'Đang dùng vị trí của bạn (làm tròn khoảng 5 km).' : 'Đang dùng trung tâm Hà Nội.'}</p>
-      <button class="btn-soft" data-act="locate" data-target="settings">${svg('pin')} Dùng vị trí hiện tại</button>
+      ${locationControls('settings', state.home)}
+    </section>
+    <section class="card">
+      <div class="eyebrow">Xem thử (để kiểm tra)</div>
+      <label class="stack"><span>Dùng dữ liệu thời tiết mẫu thay cho dữ liệu thật</span>
+        <select data-bind="demo">
+          <option value="" ${!state.demo ? 'selected' : ''}>Tắt (dữ liệu thật)</option>
+          <option value="smog" ${state.demo === 'smog' ? 'selected' : ''}>Không khí xấu (AQI 165)</option>
+          <option value="heat" ${state.demo === 'heat' ? 'selected' : ''}>Nắng nóng (36°C)</option>
+        </select></label>
+      <p class="small muted">Chỉ dùng để xem thử. Nhớ tắt khi dùng thật.</p>
     </section>
     <section class="card">
       <div class="eyebrow">Sức khoẻ (không bắt buộc)</div>
+      <p class="small muted">Để Cinnamon gợi ý món ăn và bài tập hợp với bạn.</p>
+      ${companion.PROFILE_OPTIONS.map(([v, l]) => `<label class="toggle"><span>${l}</span><input type="checkbox" value="${v}" data-bind="condition" ${state.profile.conditions.includes(v) ? 'checked' : ''}></label>`).join('')}
+      <label class="row between"><span>Muối tối đa mỗi ngày (g)</span>
+        <input type="number" inputmode="decimal" min="0" step="0.5" style="width:110px;text-align:center;background:var(--chai)" value="${state.profile.saltG ?? ''}" data-bind="salt" placeholder="—"></label>
+      <label class="row between"><span>Đạm tối đa mỗi ngày (g)</span>
+        <input type="number" inputmode="decimal" min="0" style="width:110px;text-align:center;background:var(--chai)" value="${state.profile.proteinG ?? ''}" data-bind="protein" placeholder="—"></label>
       <label class="row between"><span>Giới hạn nước mỗi ngày (ml)</span>
         <input type="number" inputmode="numeric" min="0" style="width:110px;text-align:center;background:var(--chai)" value="${state.fluidLimitMl ?? ''}" data-bind="fluid" placeholder="—"></label>
-      <p class="small muted">Nếu bác sĩ dặn giới hạn nước, Cinnamon sẽ không bao giờ khuyên uống quá mức này.</p>
+      <p class="small muted">Điền theo lời bác sĩ dặn. Nếu để trống, Cinnamon sẽ không tự đặt con số. Cinnamon không bao giờ khuyên uống nước quá giới hạn này.</p>
     </section>
     <section class="card">
       <div class="eyebrow">Dữ liệu</div>
-      <p class="small muted">Thuốc, ảnh và nhật ký chỉ lưu trên điện thoại này. Máy chủ nhắc thuốc chỉ biết giờ nhắc, không biết tên thuốc.</p>
+      <p class="small muted">Thuốc, ảnh, nhật ký và cuộc trò chuyện chỉ lưu trên điện thoại này. Máy chủ nhắc thuốc chỉ biết giờ nhắc, không biết tên thuốc. Khi bạn hỏi Cinnamon, câu hỏi được gửi tới Claude (Anthropic) để trả lời và không được lưu trên máy chủ Cinnamon.</p>
       <button class="btn-link" style="color:var(--chili)" data-act="deleteAll">Xoá toàn bộ dữ liệu</button>
     </section>`;
+}
+
+let addressDraft = '';
+
+function homeLabel(home) {
+  if (!home || home.approx) return 'Đang dùng trung tâm Hà Nội.';
+  return home.label ? `Đang dùng: ${esc(home.label)} (làm tròn khoảng 5 km).` : 'Đang dùng vị trí của bạn (làm tròn khoảng 5 km).';
+}
+
+function locationControls(target, home) {
+  return `
+    <p>${homeLabel(home)}</p>
+    <label class="field"><span class="small muted">Nhập địa chỉ, ví dụ: Láng Hạ, Đống Đa, Hà Nội</span>
+      <input data-bind="address" value="${esc(addressDraft)}" placeholder="Phường, quận, thành phố" autocomplete="street-address" enterkeyhint="search"></label>
+    <div class="grid2">
+      <button class="btn-soft" data-act="findAddress" data-target="${target}">Tìm địa chỉ</button>
+      <button class="btn-soft" data-act="locate" data-target="${target}">${svg('pin', 20)} Vị trí hiện tại</button>
+    </div>
+    <p class="small muted">Chỉ để xem không khí và thời tiết. Vị trí được làm tròn khoảng 5 km trước khi gửi đi.${target === 'welcome' ? ' Nếu bỏ qua, Cinnamon dùng trung tâm Hà Nội.' : ''}</p>`;
+}
+
+function setHome(target, home) {
+  if (target === 'welcome') {
+    welcomeDraft.home = home;
+    render();
+    return;
+  }
+  state.home = home;
+  state.forecast = null;
+  commit();
+  refreshForecast(true);
+}
+
+/** Looks up an address with OpenStreetMap's free search (only when she taps "Tìm"). */
+async function findAddress(target) {
+  const q = addressDraft.trim();
+  if (q.length < 3) return toast('Nhập địa chỉ trước nhé.');
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&accept-language=vi&countrycodes=vn&q=${encodeURIComponent(q)}`;
+    const [hit] = await (await fetch(url)).json();
+    if (!hit) return toast('Không tìm thấy địa chỉ này. Thử ghi tên phường, quận.');
+    const label = hit.display_name.split(',').slice(0, 3).map((x) => x.trim()).join(', ');
+    setHome(target, { ...core.coarsen({ lat: Number(hit.lat), lon: Number(hit.lon) }), label });
+    toast(`Đã chọn: ${label}`);
+  } catch {
+    toast('Chưa tìm được. Kiểm tra mạng rồi thử lại.');
+  }
 }
 
 function locate(target) {
   if (!('geolocation' in navigator)) return toast('Máy này không lấy được vị trí.');
   navigator.geolocation.getCurrentPosition(
     (pos) => {
-      const home = core.coarsen({ lat: pos.coords.latitude, lon: pos.coords.longitude });
-      if (target === 'welcome') welcomeDraft.home = home;
-      else {
-        state.home = home;
-        state.forecast = null;
-        commit();
-        refreshForecast(true);
-      }
-      render();
+      setHome(target, core.coarsen({ lat: pos.coords.latitude, lon: pos.coords.longitude }));
       toast('Đã lấy vị trí.');
     },
     () => toast('Không lấy được vị trí. Cinnamon sẽ dùng trung tâm Hà Nội.'),
@@ -822,6 +1238,7 @@ const actions = {
     render();
   },
   locate: (d) => locate(d.target),
+  findAddress: (d) => findAddress(d.target),
   startMeal(d) {
     recordMeal(d.meal, 'start');
     commit({ rerender: false });
@@ -923,6 +1340,63 @@ const actions = {
     commit({ rerender: false });
     go('meds');
   },
+  pickName(d) {
+    draft.name = d.name;
+    draft.nameFromPhoto = true;
+    render();
+  },
+  showIdeas() {
+    chatIdeas = !chatIdeas;
+    render();
+    if (chatIdeas) document.getElementById('chat-end')?.previousElementSibling?.scrollIntoView?.({ block: 'start' });
+  },
+  ask(d) {
+    chatIdeas = false;
+    go('chat');
+    sendChat(d.text);
+  },
+  sendChat: () => sendChat(chatDraft),
+  retryChat: () => askCinnamon(),
+  clearChat() {
+    if (!confirm('Xoá cuộc trò chuyện trên máy này?')) return;
+    state.chat = [];
+    chatError = null;
+    save();
+    render();
+  },
+  speakMsg: (d) => speak(stripMarks(state.chat[Number(d.i)]?.text || '')),
+  stepsFromMsg(d) {
+    const steps = companion.parseSteps(state.chat[Number(d.i)]?.text || '');
+    if (!steps.length) return;
+    player = { id: 'chat', title: 'Làm từng bước', steps, index: 0, fromChat: true };
+    showStep(0);
+    go('steps');
+  },
+  playerStart: () => showStep(0),
+  playerNext: () => showStep(player.index + 1),
+  playerPrev: () => showStep(Math.max(0, player.index - 1)),
+  playerSpeak: () => speakStep(),
+  playerVoice() {
+    player.voice = !player.voice;
+    if (player.voice) speakStep();
+    else speechSynthesis?.cancel();
+    render();
+  },
+  playerPause() {
+    if (player.pausedLeft != null) {
+      player.endsAt = now() + player.pausedLeft;
+      player.pausedLeft = null;
+    } else if (player.endsAt) {
+      player.pausedLeft = Math.max(0, player.endsAt - now());
+      player.endsAt = null;
+    }
+    render();
+  },
+  playerDone() {
+    const back = player.fromChat ? 'chat' : 'home';
+    player = null;
+    go(back);
+  },
   enablePush,
   disablePush,
   async testPush() {
@@ -946,7 +1420,30 @@ const binds = {
   'welcome.lunch': (el) => (welcomeDraft.rhythm.lunch = toMinutes(el.value)),
   'welcome.dinner': (el) => (welcomeDraft.rhythm.dinner = toMinutes(el.value)),
   'welcome.bed': (el) => (welcomeDraft.rhythm.bed = toMinutes(el.value)),
-  'draft.name': (el) => (draft.name = el.value),
+  address: (el) => (addressDraft = el.value),
+  demo(el) {
+    state.demo = el.value || null;
+    commit();
+  },
+  'draft.name': (el) => ((draft.name = el.value), (draft.nameFromPhoto = false)),
+  'chat.text': (el) => (chatDraft = el.value),
+  salt(el) {
+    const v = parseFloat(el.value);
+    state.profile = { ...state.profile, saltG: Number.isFinite(v) && v > 0 ? v : null };
+    commit({ rerender: false });
+  },
+  protein(el) {
+    const v = parseFloat(el.value);
+    state.profile = { ...state.profile, proteinG: Number.isFinite(v) && v > 0 ? v : null };
+    commit({ rerender: false });
+  },
+  condition(el) {
+    const set = new Set(state.profile.conditions);
+    if (el.checked) set.add(el.value);
+    else set.delete(el.value);
+    state.profile = { ...state.profile, conditions: [...set] };
+    commit({ rerender: false });
+  },
   'draft.strength': (el) => (draft.strength = el.value),
   'draft.remaining': (el) => (draft.remaining = el.value),
   'draft.hours': (el) => (draft.timing.hours = Number(el.value)),
@@ -961,10 +1458,11 @@ const binds = {
     if (!file) return;
     try {
       draft.photo = await readPhoto(file);
-      render();
     } catch {
-      toast('Không đọc được ảnh này.');
+      return toast('Không mở được ảnh này. Bạn thử chụp lại nhé.');
     }
+    el.value = '';
+    recognizeInto(draft, file);
   },
 };
 
@@ -994,7 +1492,7 @@ app.addEventListener('click', (e) => {
 // Text fields update drafts as she types; time pickers, selects and files apply on change.
 app.addEventListener('input', (e) => {
   const b = e.target.dataset?.bind;
-  if (b && (b.startsWith('draft.') || b.startsWith('welcome.')) && e.target.type !== 'file') binds[b]?.(e.target);
+  if (b && (b.startsWith('draft.') || b.startsWith('welcome.') || b === 'address' || b === 'chat.text') && e.target.type !== 'file') binds[b]?.(e.target);
 });
 app.addEventListener('change', (e) => {
   const b = e.target.dataset?.bind;
@@ -1030,18 +1528,45 @@ function render() {
     html = viewAdd();
   } else if (name === 'settings') {
     html = viewSettings();
+  } else if (name === 'chat') {
+    html = viewChat();
+  } else if (name === 'routine' || name === 'steps') {
+    if (name === 'routine' && player?.id !== arg) {
+      const r = companion.routineById(arg);
+      if (!r) return go('home');
+      player = { ...r, index: -1 };
+    }
+    if (!player) return go('chat');
+    html = viewPlayer();
   } else {
     if (!todaysCheckIn() && sessionStorage.getItem('checkinSkipped') !== todayKey() && state.meds.length) {
       return go('checkin');
     }
     html = viewHome();
   }
+  // Keep the cursor where she was typing when the screen refreshes around it.
+  const active = document.activeElement;
+  const focusBind = app.contains(active) ? active.dataset?.bind : null;
+  const caret = focusBind && typeof active.selectionStart === 'number' ? active.selectionStart : null;
   app.innerHTML = html;
   document.title = 'Cinnamon';
+  if (focusBind) {
+    const el = app.querySelector(`[data-bind="${focusBind}"]`);
+    if (el) {
+      el.focus({ preventScroll: true });
+      if (caret != null) el.setSelectionRange?.(caret, caret);
+    }
+  }
+  if (name === 'chat') document.getElementById('chat-end')?.scrollIntoView({ block: 'end' });
 }
 
 window.addEventListener('hashchange', () => {
-  if (!['add', 'edit'].includes(route().name)) draft = null;
+  const name = route().name;
+  if (!['add', 'edit'].includes(name)) draft = null;
+  if (!['routine', 'steps'].includes(name) && player) {
+    player = null;
+    if ('speechSynthesis' in window) speechSynthesis.cancel();
+  }
   render();
   window.scrollTo(0, 0);
 });

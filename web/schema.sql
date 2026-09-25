@@ -22,3 +22,11 @@ CREATE TABLE IF NOT EXISTS reminders (
 );
 
 CREATE INDEX IF NOT EXISTS reminders_due ON reminders (sent_at, at);
+
+-- Questions asked per phone per day (counts only, never the text), for the daily chat limit.
+CREATE TABLE IF NOT EXISTS chat_usage (
+  day TEXT NOT NULL,
+  device_id TEXT NOT NULL,
+  count INTEGER NOT NULL,
+  PRIMARY KEY (day, device_id)
+);
