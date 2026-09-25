@@ -1,0 +1,17 @@
+{
+  "name": "Cinnamon",
+  "short_name": "Cinnamon",
+  "description": "Nhắc uống thuốc theo bữa ăn, không khí và thời tiết hôm nay.",
+  "lang": "vi",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FAF3E8",
+  "theme_color": "#FAF3E8",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
