@@ -249,7 +249,7 @@ enum OutdoorCopy {
         guard let outlook else { return "Đang tải…" }
         guard let best = outlook.bestWindow else { return "Nên ở nhà" }
         if best.start <= Date() { return "Bây giờ" }
-        return "Sau \(Format.time(best.start))"
+        return "\(Calendar.current.isDateInTomorrow(best.start) ? "Mai, sau" : "Sau") \(Format.time(best.start))"
     }
 
     static func advice(_ outlook: DayOutlook, walkingMinutes: Int) -> String {

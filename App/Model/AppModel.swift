@@ -162,10 +162,16 @@ final class AppModel {
 
     var outlook: DayOutlook? {
         guard !forecast.isEmpty else { return nil }
-        let start = max(now, data.rhythm.wake.date(on: activeDay, calendar: calendar))
-        let end = data.rhythm.dinner.adding(minutes: 60).date(on: activeDay, calendar: calendar)
-        guard start < end else { return nil }
-        return OutdoorAdvisor(thresholds: data.thresholds).outlook(for: forecast, within: DateInterval(start: start, end: end))
+        // After this evening's waking hours, look at tomorrow's instead.
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: activeDay) ?? activeDay
+        for day in [activeDay, tomorrow] {
+            let start = max(now, data.rhythm.wake.date(on: day, calendar: calendar))
+            let end = data.rhythm.dinner.adding(minutes: 60).date(on: day, calendar: calendar)
+            if start < end {
+                return OutdoorAdvisor(thresholds: data.thresholds).outlook(for: forecast, within: DateInterval(start: start, end: end))
+            }
+        }
+        return nil
     }
 
     var currentConditions: HourAssessment? {

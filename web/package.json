@@ -1,0 +1,14 @@
+{
+  "name": "cinnamon-web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "TZ=Asia/Ho_Chi_Minh node --test test/*.test.mjs",
+    "dev": "wrangler dev --test-scheduled",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "http_ece": "^1.2.1",
+    "wrangler": "^4.141.0"
+  }
+}

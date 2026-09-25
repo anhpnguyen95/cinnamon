@@ -1,0 +1,70 @@
+name: Deploy web trial
+
+# Deploys the web version of Cinnamon and its reminder server to Cloudflare (free plan).
+# Runs on pushes to main that touch web/, or by hand from the Actions tab.
+# Needs two repository secrets (Settings → Secrets and variables → Actions):
+#   CLOUDFLARE_ACCOUNT_ID   from the Cloudflare dashboard (Workers & Pages → right-hand side)
+#   CLOUDFLARE_API_TOKEN    a token from the "Edit Cloudflare Workers" template,
+#                           with "Account · D1 · Edit" added
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['web/**', '.github/workflows/deploy-web.yml']
+
+concurrency:
+  group: deploy-web
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Check secrets
+        id: secrets
+        working-directory: .
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::warning::Cloudflare secrets are not set yet, skipping deploy. See .github/workflows/deploy-web.yml."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.secrets.outputs.ready == 'true'
+
+      - uses: actions/setup-node@v4
+        if: steps.secrets.outputs.ready == 'true'
+        with:
+          node-version: 22
+
+      - name: Install and test
+        if: steps.secrets.outputs.ready == 'true'
+        run: |
+          npm ci
+          npm test
+
+      - name: Create the database if needed
+        if: steps.secrets.outputs.ready == 'true'
+        run: |
+          find_id() { npx wrangler d1 list --json | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const db=JSON.parse(s).find(d=>d.name==="cinnamon");process.stdout.write(db?db.uuid:"")})'; }
+          ID=$(find_id)
+          if [ -z "$ID" ]; then
+            npx wrangler d1 create cinnamon
+            ID=$(find_id)
+          fi
+          test -n "$ID"
+          sed -i "s/00000000-0000-0000-0000-000000000000/$ID/" wrangler.toml
+          npx wrangler d1 execute cinnamon --remote --file schema.sql
+
+      - name: Deploy
+        if: steps.secrets.outputs.ready == 'true'
+        run: npx wrangler deploy

@@ -17,6 +17,32 @@ A calm companion app for older adults living alone. It gives medication reminder
 | Earlier-meals/bedtime nudges | Logic only (`RoutineCoach`); UI not yet |
 | Nearby places, bus and Grab comparison | Not yet |
 
+## Web trial (try before paying Apple)
+
+`web/` is a browser version of the same app for a free trial on Que's iPhone. She adds it to her Home Screen from Safari. It has the same screens (medicines with photos, meal-based reminders, check-in, air, UV and heat advice), and data stays in the phone's browser storage.
+
+Reminders arrive even when the app is closed, via a small reminder server on Cloudflare's free plan (`web/worker`). Her phone uploads only the next 7 days of reminder times with generic text ("Sau bữa trưa · 3 viên"), never medicine names. A job runs every minute and sends due reminders as encrypted Web Push notifications.
+
+What the trial can't do compared with the iOS app:
+- Notifications have no "Đã uống" button; she taps the notification to open the app.
+- Notifications don't break through Focus mode.
+- Reminders need the internet and the server.
+- Medicine names aren't read from the photo.
+
+Deploying:
+- `.github/workflows/deploy-web.yml` deploys on every push to `main` that touches `web/`.
+- It needs `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` as repository secrets; see the comments in the workflow.
+
+Local development:
+
+```sh
+cd web
+npm install
+npx wrangler d1 execute cinnamon --local --file schema.sql
+npm run dev      # http://localhost:8787
+npm test         # logic, Web Push encryption, and the Worker against a local D1 database
+```
+
 ## Layout
 
 ```

@@ -9,3 +9,5 @@ DerivedData/
 .swiftpm/
 CinnamonCore/.build/
 CinnamonCore/.swiftpm/
+web/node_modules/
+web/.wrangler/

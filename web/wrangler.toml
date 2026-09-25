@@ -1,0 +1,17 @@
+name = "cinnamon"
+main = "worker/index.js"
+compatibility_date = "2025-09-01"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "cinnamon"
+# Filled in by the deploy workflow; any value works for local `wrangler dev`.
+database_id = "00000000-0000-0000-0000-000000000000"
+
+# Check for due reminders every minute.
+[triggers]
+crons = ["* * * * *"]
