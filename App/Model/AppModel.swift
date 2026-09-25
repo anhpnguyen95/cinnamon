@@ -27,7 +27,7 @@ final class AppModel {
         self.data = (try? store.load()) ?? AppData()
     }
 
-    static var defaultDirectory: URL {
+    nonisolated static var defaultDirectory: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Cinnamon", isDirectory: true)
     }
