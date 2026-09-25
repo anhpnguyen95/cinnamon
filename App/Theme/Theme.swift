@@ -59,10 +59,10 @@ struct Spiral: Shape {
         var path = Path()
         let steps = 160
         for i in 0...steps {
-            let t = Double(i) / Double(steps)
-            let angle = t * totalAngle
+            let t = CGFloat(i) / CGFloat(steps)
+            let angle = t * CGFloat(totalAngle)
             let radius = maxRadius * t
-            let point = CGPoint(x: center.x + radius * cos(angle), y: center.y + radius * sin(angle))
+            let point = CGPoint(x: center.x + radius * CGFloat(cos(Double(angle))), y: center.y + radius * CGFloat(sin(Double(angle))))
             if i == 0 { path.move(to: point) } else { path.addLine(to: point) }
         }
         return path
@@ -77,9 +77,9 @@ struct StarAnise: Shape {
         let inner = outer * 0.4
         var path = Path()
         for i in 0..<16 {
-            let angle = Double(i) * .pi / 8 - .pi / 2
-            let r = i.isMultiple(of: 2) ? outer : inner
-            let point = CGPoint(x: center.x + r * cos(angle), y: center.y + r * sin(angle))
+            let angle = Double(i) * Double.pi / 8 - Double.pi / 2
+            let r: CGFloat = i.isMultiple(of: 2) ? outer : inner
+            let point = CGPoint(x: center.x + r * CGFloat(cos(angle)), y: center.y + r * CGFloat(sin(angle)))
             if i == 0 { path.move(to: point) } else { path.addLine(to: point) }
         }
         path.closeSubpath()
