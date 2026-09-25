@@ -204,8 +204,7 @@ function viewWelcome() {
     </div>
     <div class="stack">
       <div class="eyebrow">Khu vực nhà bạn</div>
-      <button class="btn-soft" data-act="locate" data-target="welcome">${svg('pin')} ${welcomeDraft.home && !welcomeDraft.home.approx ? 'Đã lấy vị trí ✓' : 'Dùng vị trí hiện tại'}</button>
-      <p class="small muted">Chỉ để xem không khí và thời tiết. Vị trí được làm tròn khoảng 5 km trước khi gửi đi. Nếu bỏ qua, Cinnamon dùng trung tâm Hà Nội.</p>
+      ${locationControls('welcome', welcomeDraft.home)}
     </div>
     <button class="btn-block" data-act="finishWelcome">Bắt đầu</button>`;
 }
@@ -228,6 +227,7 @@ function viewHome() {
     ${needsPush ? `<a class="card honey notice" href="#/settings" style="text-decoration:none"><strong>Bật nhắc thuốc</strong><span>Để Cinnamon gửi thông báo cả khi đang đóng ứng dụng. Bấm vào đây.</span></a>` : ''}
     ${core.shouldSuggestDoctor(state.checkIns, now()) ? `<div class="card honey notice">Tuần này bạn hay mệt hoặc ngủ không ngon. Nên kể với bác sĩ trong lần khám tới nhé.</div>` : ''}
     ${doseCard(dose)}
+    ${demoBanner()}
     ${outdoorCard()}
     ${refill.map((m) => `<div class="card chai notice">${esc(medName(m))} còn khoảng ${core.daysOfSupplyLeft(m)} ngày. Nhớ mua thêm nhé.</div>`).join('')}
     <div class="spacer"></div>
@@ -308,8 +308,27 @@ async function refreshForecast(force = false) {
   if (r === 'home' || r === 'outdoor') render();
 }
 
+/** Sample forecasts for trying the bad-day screens from anywhere. */
+function demoHours(kind) {
+  const start = Math.floor(now() / 3600e3) * 3600e3 - 3 * 3600e3;
+  const hours = [];
+  for (let i = 0; i < 51; i++) {
+    const time = start + i * 3600e3;
+    const h = new Date(time).getHours();
+    const daytime = h >= 7 && h <= 17;
+    if (kind === 'smog') hours.push({ time, aqi: 165, uv: daytime ? 4 : 0, tempC: 27, rh: 60 });
+    else hours.push({ time, aqi: h >= 19 ? 70 : 42, uv: daytime ? (h >= 10 && h <= 15 ? 8 : 3) : 0, tempC: h >= 11 && h <= 16 ? 36 : 28, rh: 65 });
+  }
+  return hours;
+}
+
+const forecastHours = () => (state.demo ? demoHours(state.demo) : state.forecast?.hours || []);
+
+const demoBanner = () =>
+  state.demo ? `<a class="card honey notice" href="#/settings" style="text-decoration:none">Đang xem dữ liệu mẫu (${state.demo === 'smog' ? 'không khí xấu' : 'nắng nóng'}). Tắt trong Cài đặt.</a>` : '';
+
 function currentOutlook() {
-  const hours = state.forecast?.hours || [];
+  const hours = forecastHours();
   if (!hours.length) return null;
   // After this evening's waking hours, look at tomorrow's instead.
   for (const day of [today(), core.addDays(today(), 1)]) {
@@ -321,7 +340,7 @@ function currentOutlook() {
 }
 
 function currentHour() {
-  const hours = state.forecast?.hours || [];
+  const hours = forecastHours();
   const h = [...hours].reverse().find((x) => x.time <= now());
   return h ? core.assessHour(h, state.thresholds) : null;
 }
@@ -368,7 +387,7 @@ function viewOutdoor() {
   const o = currentOutlook();
   const adj = dayAdjust();
   if (!o) {
-    return `${header('Bên ngoài hôm nay')}<p>${state.forecast?.error ? esc(state.forecast.error) : 'Đang tải thời tiết…'}</p>`;
+    return `${header('Bên ngoài hôm nay')}${demoBanner()}<p>${state.forecast?.error ? esc(state.forecast.error) : 'Đang tải thời tiết…'}</p>`;
   }
   const walking = core.walkingLimit(adj.indoorOnly ? core.RISK.danger : o.bestRisk ?? core.RISK.danger, adj.energy);
   const air = o.worstFactors.has('air');
@@ -403,6 +422,7 @@ function viewOutdoor() {
   const last = o.hours[o.hours.length - 1];
   return `
     ${header('Bên ngoài hôm nay')}
+    ${demoBanner()}
     ${top}
     <section class="card">
       <div class="eyebrow">Hôm nay</div>
@@ -414,7 +434,7 @@ function viewOutdoor() {
     ${o.stayIn ? '' : `<section class="card chai"><div class="eyebrow" style="color:var(--bark)">Khi ra ngoài</div><p>${advice}</p></section>`}
     ${o.heatDanger ? `<section class="card chili"><strong style="color:var(--chili-deep)">Nóng nguy hiểm ${core.timeText(o.heatDanger.start)} – ${core.timeText(o.heatDanger.end)}</strong><p>Lúc này nên bật điều hoà. Để 27–28°C và bật thêm quạt cho đỡ tốn điện. Ở phòng mát nhất, lau người bằng khăn mát.</p><p class="muted">${fluids}</p></section>` : ''}
     ${o.stayIn || adj.indoorOnly ? indoorIdeas() : ''}
-    <p class="small muted">Nguồn: Open-Meteo · cập nhật ${core.timeText(state.forecast.fetchedAt)}</p>`;
+    <p class="small muted">${state.demo ? 'Dữ liệu mẫu, không phải thời tiết thật.' : `Nguồn: Open-Meteo${state.home?.label ? ` · ${esc(state.home.label)}` : ''} · cập nhật ${state.forecast?.fetchedAt ? core.timeText(state.forecast.fetchedAt) : '—'}`}</p>`;
 }
 
 function indoorIdeas() {
@@ -674,8 +694,17 @@ function viewSettings() {
     </section>
     <section class="card">
       <div class="eyebrow">Khu vực nhà</div>
-      <p>${state.home && !state.home.approx ? 'Đang dùng vị trí của bạn (làm tròn khoảng 5 km).' : 'Đang dùng trung tâm Hà Nội.'}</p>
-      <button class="btn-soft" data-act="locate" data-target="settings">${svg('pin')} Dùng vị trí hiện tại</button>
+      ${locationControls('settings', state.home)}
+    </section>
+    <section class="card">
+      <div class="eyebrow">Xem thử (để kiểm tra)</div>
+      <label class="stack"><span>Dùng dữ liệu thời tiết mẫu thay cho dữ liệu thật</span>
+        <select data-bind="demo">
+          <option value="" ${!state.demo ? 'selected' : ''}>Tắt (dữ liệu thật)</option>
+          <option value="smog" ${state.demo === 'smog' ? 'selected' : ''}>Không khí xấu (AQI 165)</option>
+          <option value="heat" ${state.demo === 'heat' ? 'selected' : ''}>Nắng nóng (36°C)</option>
+        </select></label>
+      <p class="small muted">Chỉ dùng để xem thử. Nhớ tắt khi dùng thật.</p>
     </section>
     <section class="card">
       <div class="eyebrow">Sức khoẻ (không bắt buộc)</div>
@@ -690,19 +719,58 @@ function viewSettings() {
     </section>`;
 }
 
+let addressDraft = '';
+
+function homeLabel(home) {
+  if (!home || home.approx) return 'Đang dùng trung tâm Hà Nội.';
+  return home.label ? `Đang dùng: ${esc(home.label)} (làm tròn khoảng 5 km).` : 'Đang dùng vị trí của bạn (làm tròn khoảng 5 km).';
+}
+
+function locationControls(target, home) {
+  return `
+    <p>${homeLabel(home)}</p>
+    <label class="field"><span class="small muted">Nhập địa chỉ, ví dụ: Láng Hạ, Đống Đa, Hà Nội</span>
+      <input data-bind="address" value="${esc(addressDraft)}" placeholder="Phường, quận, thành phố" autocomplete="street-address" enterkeyhint="search"></label>
+    <div class="grid2">
+      <button class="btn-soft" data-act="findAddress" data-target="${target}">Tìm địa chỉ</button>
+      <button class="btn-soft" data-act="locate" data-target="${target}">${svg('pin', 20)} Vị trí hiện tại</button>
+    </div>
+    <p class="small muted">Chỉ để xem không khí và thời tiết. Vị trí được làm tròn khoảng 5 km trước khi gửi đi.${target === 'welcome' ? ' Nếu bỏ qua, Cinnamon dùng trung tâm Hà Nội.' : ''}</p>`;
+}
+
+function setHome(target, home) {
+  if (target === 'welcome') {
+    welcomeDraft.home = home;
+    render();
+    return;
+  }
+  state.home = home;
+  state.forecast = null;
+  commit();
+  refreshForecast(true);
+}
+
+/** Looks up an address with OpenStreetMap's free search (only when she taps "Tìm"). */
+async function findAddress(target) {
+  const q = addressDraft.trim();
+  if (q.length < 3) return toast('Nhập địa chỉ trước nhé.');
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&accept-language=vi&countrycodes=vn&q=${encodeURIComponent(q)}`;
+    const [hit] = await (await fetch(url)).json();
+    if (!hit) return toast('Không tìm thấy địa chỉ này. Thử ghi tên phường, quận.');
+    const label = hit.display_name.split(',').slice(0, 3).map((x) => x.trim()).join(', ');
+    setHome(target, { ...core.coarsen({ lat: Number(hit.lat), lon: Number(hit.lon) }), label });
+    toast(`Đã chọn: ${label}`);
+  } catch {
+    toast('Chưa tìm được. Kiểm tra mạng rồi thử lại.');
+  }
+}
+
 function locate(target) {
   if (!('geolocation' in navigator)) return toast('Máy này không lấy được vị trí.');
   navigator.geolocation.getCurrentPosition(
     (pos) => {
-      const home = core.coarsen({ lat: pos.coords.latitude, lon: pos.coords.longitude });
-      if (target === 'welcome') welcomeDraft.home = home;
-      else {
-        state.home = home;
-        state.forecast = null;
-        commit();
-        refreshForecast(true);
-      }
-      render();
+      setHome(target, core.coarsen({ lat: pos.coords.latitude, lon: pos.coords.longitude }));
       toast('Đã lấy vị trí.');
     },
     () => toast('Không lấy được vị trí. Cinnamon sẽ dùng trung tâm Hà Nội.'),
@@ -822,6 +890,7 @@ const actions = {
     render();
   },
   locate: (d) => locate(d.target),
+  findAddress: (d) => findAddress(d.target),
   startMeal(d) {
     recordMeal(d.meal, 'start');
     commit({ rerender: false });
@@ -946,6 +1015,11 @@ const binds = {
   'welcome.lunch': (el) => (welcomeDraft.rhythm.lunch = toMinutes(el.value)),
   'welcome.dinner': (el) => (welcomeDraft.rhythm.dinner = toMinutes(el.value)),
   'welcome.bed': (el) => (welcomeDraft.rhythm.bed = toMinutes(el.value)),
+  address: (el) => (addressDraft = el.value),
+  demo(el) {
+    state.demo = el.value || null;
+    commit();
+  },
   'draft.name': (el) => (draft.name = el.value),
   'draft.strength': (el) => (draft.strength = el.value),
   'draft.remaining': (el) => (draft.remaining = el.value),
@@ -994,7 +1068,7 @@ app.addEventListener('click', (e) => {
 // Text fields update drafts as she types; time pickers, selects and files apply on change.
 app.addEventListener('input', (e) => {
   const b = e.target.dataset?.bind;
-  if (b && (b.startsWith('draft.') || b.startsWith('welcome.')) && e.target.type !== 'file') binds[b]?.(e.target);
+  if (b && (b.startsWith('draft.') || b.startsWith('welcome.') || b === 'address') && e.target.type !== 'file') binds[b]?.(e.target);
 });
 app.addEventListener('change', (e) => {
   const b = e.target.dataset?.bind;
