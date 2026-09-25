@@ -1,6 +1,6 @@
 // Cinnamon service worker: offline app shell and reminder notifications.
-const CACHE = 'cinnamon-v2';
-const SHELL = ['./', 'index.html', 'styles.css', 'app.js', 'core.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/apple-touch-icon.png'];
+const CACHE = 'cinnamon-v3';
+const SHELL = ['./', 'index.html', 'styles.css', 'app.js', 'core.js', 'companion.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/apple-touch-icon.png'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));

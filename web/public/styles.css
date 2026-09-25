@@ -234,3 +234,28 @@ label.field { display: flex; flex-direction: column; gap: 8px; }
   .spin { animation: spin 6s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
 }
+
+/* Photo reading */
+input.attention { outline: 3px solid var(--caramel); outline-offset: 2px; }
+
+/* Routines */
+.routine-card { text-decoration: none; color: inherit; gap: 10px; }
+.minutes { width: 64px; min-width: 64px; height: 64px; border-radius: 20px; background: var(--jade-soft); color: var(--jade-deep); display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; line-height: 1.1; }
+.minutes b { font-family: var(--display); font-size: 28px; font-weight: 800; }
+.timer { align-self: center; width: 180px; height: 180px; min-height: 180px; border-radius: 50%; background: var(--surface); color: var(--bark); border: 10px solid var(--jade-soft); box-shadow: var(--shadow); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 0; }
+.timer span { font-family: var(--display); font-size: 52px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+.timer small { font-size: 13px; font-weight: 600; color: var(--muted); }
+.timer.done { border-color: var(--jade); color: var(--jade); }
+.btn-chip[aria-pressed="true"] { background: var(--jade); color: #fff; }
+
+/* Chat */
+.starters { display: flex; flex-wrap: wrap; gap: 8px; }
+.starters .btn-chip { background: var(--surface); }
+.bubble { align-self: flex-start; max-width: 92%; background: var(--surface); border-radius: 22px 22px 22px 6px; padding: 14px 16px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 12px; font-size: 19px; }
+.bubble.mine { align-self: flex-end; background: var(--bark); color: var(--cream); border-radius: 22px 22px 6px 22px; box-shadow: none; white-space: pre-wrap; }
+.bubble .reply { white-space: pre-wrap; line-height: 1.5; }
+.bubble .btn-chip { min-height: 40px; font-size: 15px; }
+.composer { position: sticky; bottom: calc(env(safe-area-inset-bottom) + 8px); display: flex; gap: 10px; align-items: flex-end; background: var(--surface); border-radius: 28px; padding: 8px 8px 8px 16px; box-shadow: var(--shadow); }
+.composer textarea { flex: 1; border: none; background: transparent; font: inherit; font-size: 19px; resize: none; padding: 10px 0; color: var(--ink); min-height: 48px; max-height: 160px; }
+.composer textarea:focus { outline: none; }
+.composer .send { width: 52px; min-width: 52px; height: 52px; min-height: 52px; background: var(--cinnamon); color: #fff; }

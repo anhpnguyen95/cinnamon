@@ -6,6 +6,9 @@ name: Deploy web trial
 #   CLOUDFLARE_ACCOUNT_ID   from the Cloudflare dashboard (Workers & Pages → right-hand side)
 #   CLOUDFLARE_API_TOKEN    a token from the "Edit Cloudflare Workers" template,
 #                           with "Account · D1 · Edit" added
+# Optional, for the chat ("Hỏi Cinnamon"):
+#   ANTHROPIC_API_KEY       from console.anthropic.com → API keys. Without it the chat
+#                           says it isn't set up yet; everything else works.
 
 on:
   workflow_dispatch:
@@ -26,6 +29,7 @@ jobs:
     env:
       RAW_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       RAW_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      RAW_ANTHROPIC_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
     steps:
       - name: Check secrets
         id: secrets
@@ -75,3 +79,14 @@ jobs:
       - name: Deploy
         if: steps.secrets.outputs.ready == 'true'
         run: npx wrangler deploy
+
+      - name: Set the chat API key
+        if: steps.secrets.outputs.ready == 'true'
+        run: |
+          KEY=$(printf '%s' "$RAW_ANTHROPIC_KEY" | tr -d '[:space:]')
+          if [ -z "$KEY" ]; then
+            echo "::warning::ANTHROPIC_API_KEY is not set, so the chat is off. See .github/workflows/deploy-web.yml."
+            exit 0
+          fi
+          echo "::add-mask::$KEY"
+          printf '%s' "$KEY" | npx wrangler secret put ANTHROPIC_API_KEY
